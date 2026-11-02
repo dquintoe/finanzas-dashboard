@@ -15,19 +15,27 @@ export function aObjetos(valores) {
     .map(f => Object.fromEntries(cab.map((c, i) => [String(c).trim(), f[i] ?? ''])));
 }
 
-export async function cargarBD(token) {
-  const H = CONFIG.HOJAS;
-  const rangos = [H.MOV, H.TAR, H.PRE, H.CRO, H.ING, H.USR, H.CFG];
+async function batchGet(token, rangos) {
   const url = new URL(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREADSHEET_ID}/values:batchGet`);
   rangos.forEach(r => url.searchParams.append('ranges', `'${r}'`));
   url.searchParams.set('valueRenderOption', 'UNFORMATTED_VALUE');
   url.searchParams.set('dateTimeRenderOption', 'SERIAL_NUMBER');
 
   const r = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+  if (r.status === 400) return null; // alguna hoja no existe (p. ej. Cuentas antes de la migración v2.1)
   if (r.status === 401) throw new SesionVencida('La sesión expiró.');
   if (r.status === 403 || r.status === 404) throw new AccesoDenegado('Tu cuenta no tiene acceso a la base de datos.');
   if (!r.ok) throw new Error(`Error al leer la BD (${r.status}).`);
   const { valueRanges } = await r.json();
-  const [mov, tar, pre, cro, ing, usr, cfg] = valueRanges.map(v => aObjetos(v.values));
-  return { mov, tar, pre, cro, ing, usr, cfg };
+  return valueRanges.map(v => aObjetos(v.values));
+}
+
+export async function cargarBD(token) {
+  const H = CONFIG.HOJAS;
+  const base = [H.MOV, H.TAR, H.PRE, H.CRO, H.ING, H.USR, H.CFG];
+  // Hojas opcionales: si aún no existen, se lee sin ellas
+  let res = await batchGet(token, [...base, H.CTA]);
+  const [mov, tar, pre, cro, ing, usr, cfg, cta] = res || [...(await batchGet(token, base) || []), []];
+  if (!mov) throw new Error('No se pudo leer la BD (rangos inválidos).');
+  return { mov, tar, pre, cro, ing, usr, cfg, cta: cta || [] };
 }

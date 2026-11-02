@@ -46,4 +46,16 @@ assert.equal(M.rolDe(d.usr, 'DQUINTO.E@gmail.com'), 'Administrador');
 assert.equal(M.rolDe(d.usr, 'otro@gmail.com'), null);
 assert.equal(M.filtrarMovimientos(movs, { periodo: '2026-10', soloRevisar: true }).every(m => m.Estado_Clasificacion === 'Revisar'), true);
 console.log('Cobertura oct:', M.coberturaFuentes(movs, '2026-10').join(', '));
+const ingFx = [
+  { Periodo: '2026-05', Rem_Basica: 9000, Asig_Familiar: 113, Condicion_Trabajo: 1000, CTS: 5315.92, Utilidades: 1059.36, AFP_Aporte: 911.30, AFP_Prima_Seguro: 124.85, Renta_5ta: 920.93, Desc_Seguros: 0, Neto_Recibido: 8155.92, Estado: 'Real' },
+  { Periodo: '2026-07', Rem_Basica: 9000, Asig_Familiar: 113, Condicion_Trabajo: 1000, Gratificacion: 9113, Bonif_Extraordinaria: 615.13, AFP_Aporte: 911.30, AFP_Prima_Seguro: 124.85, Renta_5ta: 920.93, Desc_Seguros: 282.21, Neto_Recibido: 7873.71, Estado: 'Real' },
+  { Periodo: '2026-10', Rem_Basica: 9000, Asig_Familiar: 113, Condicion_Trabajo: 1000, AFP_Aporte: 911.30, AFP_Prima_Seguro: 124.85, Renta_5ta: 920.92, Desc_Seguros: 282.21, Neto_Recibido: 7873.72, Estado: 'Estimado' }];
+const bol = M.resumenBoletas(ingFx);
+assert.ok(bol.every(b => b.cuadra), 'remuneración − descuentos = neto en todas');
+assert.equal(bol[0].spp, 1036.15); assert.equal(bol[0].aparte, 6375.28); assert.equal(bol[1].aparte, 9728.13);
+assert.equal(bol[0].haberes, 16488.28); assert.equal(bol[1].grat, 9113); assert.equal(bol[2].extras, 0);
+assert.equal(M.boletaDelPeriodo(bol, '2026-08').periodo, '2026-07');
+const ac = M.acumuladoAnual(bol, '2026-10');
+assert.equal(ac.meses, 3); assert.equal(ac.extras, 16103.41); assert.equal(ac.haberes, 46442.41); assert.equal(ac.renta5, 2762.78); assert.equal(ac.eps, 564.42);
+console.log('Boletas:', bol.map(b => `${b.periodo} SPP ${b.spp} R5 ${b.renta5} EPS ${b.eps} neto ${b.neto} ${b.cuadra ? 'OK' : 'X'}`).join(' | '));
 console.log('\nPRUEBAS DEL MODELO OK');

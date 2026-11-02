@@ -5,6 +5,8 @@
  *  - Ingreso: Tipo "Ingreso" sin CTS (CTS va a una cuenta intangible) + "Reembolso" como otros ingresos.
  *  - Flujo neto = Ingresos + Otros ingresos − Gastos − Capital de cuotas (ExtraCash/Rapicash)
  *                 − Cuotas de préstamos pagadas.
+ *  - Cuenta bancaria: "Abono sueldo" (depósito real) se muestra para conciliar con la boleta, sin sumarse dos veces;
+ *    "Adelanto de sueldo" es deuda recibida, no ingreso; transferencias a cuentas propias no son gasto.
  *  - Deuda: última foto de cada tarjeta + saldo de préstamos que NO están dentro de una tarjeta
  *           (ExtraCash/Rapicash ya forman parte de la deuda de su tarjeta).
  */
@@ -52,7 +54,8 @@ export function periodoPorDefecto(movs, hoy = new Date()) {
 
 /** Indicadores de un periodo y moneda. */
 export function resumenPeriodo(movs, periodo, moneda = 'PEN') {
-  const r = { ingresos: 0, otrosIngresos: 0, cts: 0, gastos: 0, capital: 0, cuotasPrestamo: 0, pagosTarjeta: 0, revisar: 0, movimientos: 0 };
+  const r = { ingresos: 0, otrosIngresos: 0, cts: 0, gastos: 0, capital: 0, cuotasPrestamo: 0, pagosTarjeta: 0,
+    abonoSueldo: 0, adelantos: 0, pagoAdelantos: 0, revisar: 0, movimientos: 0 };
   movs.filter(m => m.Periodo === periodo && m.Moneda === moneda).forEach(m => {
     r.movimientos++;
     if (m.Estado_Clasificacion === 'Revisar') r.revisar++;
@@ -60,8 +63,12 @@ export function resumenPeriodo(movs, periodo, moneda = 'PEN') {
     else if (m.Tipo === 'Reembolso') r.otrosIngresos += m.Monto;
     else if (m.Tipo === 'Gasto') r.gastos += m.Monto;
     else if (m.Tipo === 'Amortización deuda') r.capital += m.Monto;
+    else if (m.Tipo === 'Abono sueldo') r.abonoSueldo += m.Monto;              // conciliación: no suma al ingreso (lo da la boleta)
+    else if (m.Tipo === 'Préstamo recibido' && m.Subcategoria === 'Adelanto de sueldo') r.adelantos += m.Monto;
     else if (m.Tipo === 'Pago deuda') {
-      if (m.Subcategoria === 'Cuota de préstamo pagada') r.cuotasPrestamo += m.Monto; else r.pagosTarjeta += m.Monto;
+      if (m.Subcategoria === 'Cuota de préstamo pagada') r.cuotasPrestamo += m.Monto;
+      else if (m.Subcategoria === 'Pago adelanto de sueldo') r.pagoAdelantos += m.Monto;
+      else r.pagosTarjeta += m.Monto;
     }
   });
   Object.keys(r).forEach(k => { r[k] = redondear(r[k]); });
@@ -192,4 +199,60 @@ export function filtrarMovimientos(movs, { periodo, moneda, texto, soloRevisar, 
     (!soloRevisar || m.Estado_Clasificacion === 'Revisar') && (!categoria || m.Categoria === categoria) &&
     (!t || [m.Descripcion, m.Contraparte, m.Categoria, m.Subcategoria, m.Medio_Pago].some(v => String(v || '').toLowerCase().includes(t))))
     .sort((a, b) => b.Fecha - a.Fecha);
+}
+
+/** Último saldo de cada cuenta bancaria (hoja Cuentas). */
+export function resumenCuentas(cuentas) {
+  const ult = {};
+  cuentas.forEach(c => {
+    const f = aFecha(c.Fecha_Corte);
+    const k = String(c.Cuenta);
+    if (!ult[k] || f > ult[k].fecha) ult[k] = { entidad: c.Entidad, cuenta: k, producto: c.Producto, moneda: c.Moneda || 'PEN',
+      fecha: f, saldoContable: num(c.Saldo_Contable), saldoDisponible: num(c.Saldo_Disponible) };
+  });
+  return Object.values(ult);
+}
+
+/**
+ * Boletas: remuneración del mes y descuentos al trabajador (hoja Ingresos).
+ *  SPP = aporte obligatorio + prima de seguro + comisión variable; Renta 5ta; Seguros (EPS); otros descuentos.
+ *  "Total_Descuentos" de la boleta incluye pagos que se abonan aparte (CTS, utilidades, gratificación),
+ *  por eso se usan los componentes: remuneración − descuentos = neto.
+ */
+export function resumenBoletas(ingresos) {
+  return ingresos.map(b => {
+    const periodo = typeof b.Periodo === 'string' ? b.Periodo.replace(/^'/, '').slice(0, 7) : periodoDe(aFecha(b.Periodo));
+    const remuneracion = num(b.Rem_Basica) + num(b.Asig_Familiar) + num(b.Condicion_Trabajo);
+    const spp = num(b.AFP_Aporte) + num(b.AFP_Prima_Seguro) + num(b.AFP_Comision_Variable);
+    const renta5 = num(b.Renta_5ta), eps = num(b.Desc_Seguros), otros = num(b.Otros_Descuentos);
+    const descuentos = spp + renta5 + eps + otros;
+    const basica = num(b.Rem_Basica), asig = num(b.Asig_Familiar), cond = num(b.Condicion_Trabajo);
+    const grat = num(b.Gratificacion), bonif = num(b.Bonif_Extraordinaria), cts = num(b.CTS), util = num(b.Utilidades);
+    const aparte = grat + bonif + cts + util;
+    return {
+      periodo, estado: b.Estado || 'Real', remuneracion: redondear(remuneracion),
+      basica, asig, cond, grat, bonif, cts, util, extras: redondear(aparte), haberes: redondear(remuneracion + aparte), spp: redondear(spp), renta5: redondear(renta5),
+      eps: redondear(eps), otros: redondear(otros), descuentos: redondear(descuentos), neto: num(b.Neto_Recibido),
+      aparte: redondear(aparte), essalud: num(b.EsSalud_Empleador),
+      cuadra: Math.abs(remuneracion - descuentos - num(b.Neto_Recibido)) < 0.01
+    };
+  }).filter(b => b.periodo).sort((a, b) => a.periodo.localeCompare(b.periodo));
+}
+
+/** Boleta del periodo; si no hay, la más reciente anterior (indicando que es de otro mes). */
+export function boletaDelPeriodo(boletas, periodo) {
+  const previas = boletas.filter(b => b.periodo <= periodo);
+  return previas.length ? previas[previas.length - 1] : null;
+}
+
+/** Acumulado del año del periodo (útil para la declaración de renta). */
+export function acumuladoAnual(boletas, periodo) {
+  const anio = String(periodo).slice(0, 4);
+  const acc = { spp: 0, renta5: 0, eps: 0, otros: 0, remuneracion: 0, basica: 0, asig: 0, cond: 0, grat: 0, bonif: 0, cts: 0, util: 0, extras: 0, haberes: 0, meses: 0 };
+  boletas.filter(b => b.periodo.startsWith(anio) && b.periodo <= periodo).forEach(b => {
+    acc.spp += b.spp; acc.renta5 += b.renta5; acc.eps += b.eps; acc.otros += b.otros; acc.remuneracion += b.remuneracion;
+    acc.basica += b.basica; acc.asig += b.asig; acc.cond += b.cond; acc.grat += b.grat; acc.bonif += b.bonif; acc.cts += b.cts; acc.util += b.util; acc.extras += b.extras; acc.haberes += b.haberes; acc.meses++;
+  });
+  Object.keys(acc).forEach(k => { if (k !== 'meses') acc[k] = redondear(acc[k]); });
+  return acc;
 }

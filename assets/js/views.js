@@ -36,7 +36,9 @@ export function renderKpis(el, r, deuda, pagos, moneda, totalRevisar) {
   const deudaVal = moneda === 'USD' ? deuda.deudaTarjetasUSD : deuda.deudaTotalPEN;
   el.innerHTML = [
     kpi('Ingresos del mes', fmtMoneda(r.ingresos + r.otrosIngresos, moneda),
-      [r.otrosIngresos ? `incluye ${fmtMoneda(r.otrosIngresos, moneda)} de reembolsos` : '', r.cts ? `CTS aparte: ${fmtMoneda(r.cts, moneda)}` : ''].filter(Boolean).join(' · ')),
+      [r.abonoSueldo ? `abono real del sueldo en cuenta: ${fmtMoneda(r.abonoSueldo, moneda)}` : '',
+       r.otrosIngresos ? `incluye ${fmtMoneda(r.otrosIngresos, moneda)} de reembolsos` : '', r.cts ? `CTS aparte: ${fmtMoneda(r.cts, moneda)}` : ''].filter(Boolean).join(' · '),
+      r.adelantos ? { tipo: 'critico', texto: `Adelantos de sueldo: ${fmtMoneda(r.adelantos, moneda)}` } : null),
     kpi('Gastos del mes', fmtMoneda(r.gastos, moneda), `${r.movimientos} movimientos`),
     kpi('Flujo neto estimado', fmtMoneda(r.flujo, moneda),
       'ingresos − gastos − capital y cuotas de préstamos',
@@ -105,4 +107,65 @@ export function renderMovimientos(el, filas, pagina, porPagina) {
       <td>${esc(m.Descripcion)}</td><td>${esc(m.Contraparte)}</td><td>${esc(m.Medio_Pago)}</td>
       <td class="num">${fmtMoneda(m.Monto, m.Moneda)}</td><td><span class="etiqueta ${m.Estado_Clasificacion === 'Revisar' ? 'aviso' : ''}">${esc(m.Estado_Clasificacion)}</span></td></tr>`),
     'No hay movimientos con estos filtros');
+}
+
+export function renderCuentas(el, cuentas) {
+  el.innerHTML = tabla([{ t: 'Cuenta' }, { t: 'Al' }, { t: 'Saldo contable', num: true }, { t: 'Saldo disponible', num: true }],
+    cuentas.map(c => `<tr><td><b>${esc(c.entidad)}</b> ${esc(c.producto)} ${esc(c.cuenta)}</td><td>${fmtFecha(c.fecha)}</td>
+      <td class="num">${fmtMoneda(c.saldoContable, c.moneda)}</td><td class="num">${fmtMoneda(c.saldoDisponible, c.moneda)}</td></tr>`),
+    'Aún no hay constancias de cuenta cargadas');
+}
+
+const pct = (x, base) => base ? `${((x / base) * 100).toFixed(1)}% de la remuneración` : '';
+
+const detalleExtras = b => [['Gratificación', b.grat], ['Bonif. extraordinaria', b.bonif], ['CTS', b.cts], ['Utilidades', b.util]]
+  .filter(([, v]) => v).map(([t, v]) => `${t} ${fmtMoneda(v, 'PEN', true)}`).join(' · ');
+
+/** Ingresos de la boleta (haberes): remuneración fija y conceptos extra. */
+export function renderIngresosBoleta(elKpis, elTabla, boletas, boleta, acum, periodo) {
+  if (!boleta) { elKpis.innerHTML = '<p class="nota">No hay boletas cargadas hasta este periodo.</p>'; elTabla.innerHTML = ''; return; }
+  elKpis.innerHTML = [
+    kpi('Remuneración básica', fmtMoneda(boleta.basica), pct(boleta.basica, boleta.remuneracion)),
+    kpi('Asignación familiar', fmtMoneda(boleta.asig), pct(boleta.asig, boleta.remuneracion)),
+    kpi('Condición de trabajo', fmtMoneda(boleta.cond), pct(boleta.cond, boleta.remuneracion)),
+    kpi('Ingresos extras del mes', fmtMoneda(boleta.extras), detalleExtras(boleta) || 'sin gratificación, bonos, CTS ni utilidades este mes'),
+    kpi('Total ingresos de la boleta', fmtMoneda(boleta.haberes), 'remuneración + ingresos extras'),
+    kpi(`Ingresos extras ${periodo.slice(0, 4)} (${acum.meses} boletas)`, fmtMoneda(acum.extras), detalleExtras(acum) || '—')
+  ].join('');
+  const c = v => `<td class="num">${v ? fmtMoneda(v) : '—'}</td>`;
+  elTabla.innerHTML = tabla(
+    [{ t: 'Mes' }, { t: 'Rem. básica', num: true }, { t: 'Asig. familiar', num: true }, { t: 'Cond. trabajo', num: true }, { t: 'Gratificación', num: true },
+     { t: 'Bonif. extraord.', num: true }, { t: 'CTS', num: true }, { t: 'Utilidades', num: true }, { t: 'Total ingresos', num: true }, { t: '' }],
+    [...boletas.slice().reverse().map(b => `<tr><td>${esc(nombreMes(b.periodo, true))}</td>${c(b.basica)}${c(b.asig)}${c(b.cond)}${c(b.grat)}${c(b.bonif)}${c(b.cts)}${c(b.util)}
+      <td class="num"><b>${fmtMoneda(b.haberes)}</b></td><td>${b.estado === 'Estimado' ? '<span class="etiqueta aviso">Estimado</span>' : ''}</td></tr>`),
+     `<tr class="total"><td><b>Total ${periodo.slice(0, 4)}</b></td>${c(acum.basica)}${c(acum.asig)}${c(acum.cond)}${c(acum.grat)}${c(acum.bonif)}${c(acum.cts)}${c(acum.util)}
+      <td class="num"><b>${fmtMoneda(acum.haberes)}</b></td><td></td></tr>`],
+    'No hay boletas cargadas');
+}
+
+export function renderRemuneracion(elKpis, elTabla, elNota, boletas, boleta, acum, periodo) {
+  if (!boleta) {
+    elKpis.innerHTML = '<p class="nota">No hay boletas cargadas hasta este periodo.</p>'; elTabla.innerHTML = ''; elNota.textContent = '';
+    return;
+  }
+  const otroMes = boleta.periodo !== periodo ? ` (boleta de ${nombreMes(boleta.periodo)}: aún no hay la de ${nombreMes(periodo)})` : '';
+  elNota.textContent = `${nombreMes(boleta.periodo)}${boleta.estado === 'Estimado' ? ' · ESTIMADO (igual a la última boleta real)' : ''}${otroMes}`;
+  elKpis.innerHTML = [
+    kpi('Remuneración del mes', fmtMoneda(boleta.remuneracion), 'básico + asignación familiar + condición de trabajo'),
+    kpi('SPP (AFP)', fmtMoneda(boleta.spp), pct(boleta.spp, boleta.remuneracion)),
+    kpi('Renta de 5ta categoría', fmtMoneda(boleta.renta5), pct(boleta.renta5, boleta.remuneracion)),
+    kpi('Descuento seguros (EPS)', fmtMoneda(boleta.eps), pct(boleta.eps, boleta.remuneracion)),
+    kpi('Neto recibido', fmtMoneda(boleta.neto), `descuentos totales ${fmtMoneda(boleta.descuentos)} (${((boleta.descuentos / boleta.remuneracion) * 100).toFixed(1)}%)`,
+      boleta.cuadra ? { tipo: 'bueno', texto: 'Cuadra con la boleta' } : { tipo: 'critico', texto: 'No cuadra: revisar boleta' }),
+    kpi(`Acumulado ${periodo.slice(0, 4)} (${acum.meses} boletas)`, fmtMoneda(acum.spp + acum.renta5 + acum.eps + acum.otros),
+      `SPP ${fmtMoneda(acum.spp, 'PEN', true)} · Renta 5ta ${fmtMoneda(acum.renta5, 'PEN', true)} · EPS ${fmtMoneda(acum.eps, 'PEN', true)}`)
+  ].join('');
+  elTabla.innerHTML = tabla(
+    [{ t: 'Mes' }, { t: 'Remuneración', num: true }, { t: 'SPP (AFP)', num: true }, { t: 'Renta 5ta', num: true }, { t: 'Seguros (EPS)', num: true },
+     { t: 'Otros', num: true }, { t: 'Total desc.', num: true }, { t: 'Neto', num: true }, { t: '' }],
+    boletas.slice().reverse().map(b => `<tr><td>${esc(nombreMes(b.periodo, true))}</td><td class="num">${fmtMoneda(b.remuneracion)}</td>
+      <td class="num">${fmtMoneda(b.spp)}</td><td class="num">${fmtMoneda(b.renta5)}</td><td class="num">${fmtMoneda(b.eps)}</td>
+      <td class="num">${fmtMoneda(b.otros)}</td><td class="num">${fmtMoneda(b.descuentos)}</td><td class="num"><b>${fmtMoneda(b.neto)}</b></td>
+      <td>${b.estado === 'Estimado' ? '<span class="etiqueta aviso">Estimado</span>' : ''}${b.cuadra ? '' : ' <span class="etiqueta critico">No cuadra</span>'}</td></tr>`),
+    'No hay boletas cargadas');
 }

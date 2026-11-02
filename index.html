@@ -43,7 +43,7 @@
         <span>Finanzas personales</span>
       </div>
       <nav class="nav" aria-label="Secciones">
-        <a href="#resumen">Resumen</a><a href="#deudas">Deudas</a><a href="#movimientos">Movimientos</a>
+        <a href="#resumen">Resumen</a><a href="#remuneracion">Remuneración</a><a href="#deudas">Cuentas y deudas</a><a href="#movimientos">Movimientos</a>
       </nav>
       <div class="usuario">
         <div id="acciones-admin" class="acciones" hidden>
@@ -85,7 +85,31 @@
         </div>
       </section>
 
+      <section id="remuneracion">
+        <div class="tarjeta">
+          <h2>Ingresos de la boleta <span class="nota" id="nota-boleta"></span></h2>
+          <div id="kpis-ing-boleta" class="kpis"></div>
+        </div>
+        <div class="tarjeta">
+          <h2>Descuentos al trabajador</h2>
+          <div id="kpis-boleta" class="kpis"></div>
+        </div>
+        <div class="rejilla">
+          <figure class="tarjeta grafico">
+            <figcaption><h2>Ingresos de la boleta por mes</h2><span class="nota">* estimado</span></figcaption>
+            <div class="lienzo"><canvas id="g-ingresos-boleta" role="img" aria-label="Remuneración fija, gratificación, bonificación, CTS y utilidades por mes"></canvas></div>
+          </figure>
+          <figure class="tarjeta grafico">
+            <figcaption><h2>Descuentos al trabajador por mes</h2><span class="nota">* estimado</span></figcaption>
+            <div class="lienzo"><canvas id="g-descuentos" role="img" aria-label="SPP, Renta de 5ta y Seguros EPS por mes"></canvas></div>
+          </figure>
+        </div>
+        <div class="tarjeta"><h2>Detalle de ingresos por boleta <span class="nota">CTS y utilidades se depositan aparte del sueldo</span></h2><div id="t-ing-boletas"></div></div>
+        <div class="tarjeta"><h2>Detalle de descuentos por boleta</h2><div id="t-boletas"></div></div>
+      </section>
+
       <section id="deudas">
+        <div class="tarjeta"><h2>Cuentas bancarias <span class="nota">(saldo según la última constancia)</span></h2><div id="t-cuentas"></div></div>
         <div class="tarjeta"><h2>Tarjetas de crédito <span class="nota">(último estado de cuenta)</span></h2><div id="t-tarjetas"></div></div>
         <div class="tarjeta"><h2>Préstamos</h2><div id="t-prestamos"></div></div>
       </section>

@@ -89,3 +89,65 @@ export function graficoCategorias(datos, moneda) {
     plugins: [etiquetasValor(moneda)]
   });
 }
+
+/** Descuentos de boleta por mes: barras apiladas (una sola escala), 3 series en orden fijo de paleta. */
+export function graficoDescuentos(boletas) {
+  const series = [['SPP (AFP)', 'spp', '--serie-1'], ['Renta 5ta', 'renta5', '--serie-2'], ['Seguros (EPS)', 'eps', '--serie-3']];
+  crear('g-descuentos', {
+    type: 'bar',
+    data: {
+      labels: boletas.map(b => nombreMes(b.periodo, true) + (b.estado === 'Estimado' ? '*' : '')),
+      datasets: series.map(([label, k, color], i) => ({
+        label, data: boletas.map(b => b[k]), backgroundColor: css(color),
+        borderColor: css('--superficie'), borderWidth: { top: i < series.length - 1 ? 2 : 0 },
+        borderRadius: i === series.length - 1 ? { topLeft: 4, topRight: 4 } : 0, borderSkipped: false, maxBarThickness: 28
+      }))
+    },
+    options: {
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top', align: 'start', labels: { boxWidth: 10, boxHeight: 10 } },
+        tooltip: { callbacks: {
+          label: c => `${c.dataset.label}: ${fmtMoneda(c.parsed.y)}`,
+          footer: items => 'Total: ' + fmtMoneda(items.reduce((s, x) => s + x.parsed.y, 0))
+        } }
+      },
+      scales: {
+        x: { stacked: true, grid: { display: false }, border: { color: css('--eje') } },
+        y: { stacked: true, beginAtZero: true, border: { display: false }, ticks: { callback: v => fmtMoneda(v, 'PEN', true) } }
+      }
+    }
+  });
+}
+
+/** Ingresos de la boleta por mes: remuneración fija + conceptos extra, apilados (slots 1–5 de la paleta). */
+export function graficoIngresosBoleta(boletas) {
+  const series = [['Remuneración fija', 'remuneracion'], ['Gratificación', 'grat'], ['Bonif. extraordinaria', 'bonif'], ['CTS', 'cts'], ['Utilidades', 'util']]
+    .filter(([, k]) => boletas.some(b => b[k]));
+  crear('g-ingresos-boleta', {
+    type: 'bar',
+    data: {
+      labels: boletas.map(b => nombreMes(b.periodo, true) + (b.estado === 'Estimado' ? '*' : '')),
+      datasets: series.map(([label, k], i) => ({
+        label, data: boletas.map(b => b[k]), backgroundColor: css(`--serie-${i + 1}`),
+        borderColor: css('--superficie'), borderWidth: { top: 2 }, borderSkipped: false, maxBarThickness: 28
+      }))
+    },
+    options: {
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top', align: 'start', labels: { boxWidth: 10, boxHeight: 10 } },
+        tooltip: { filter: i => i.parsed.y > 0, callbacks: {
+          label: c => `${c.dataset.label}: ${fmtMoneda(c.parsed.y)}`,
+          footer: items => 'Total: ' + fmtMoneda(items.reduce((s, x) => s + x.parsed.y, 0))
+        } }
+      },
+      scales: {
+        x: { stacked: true, grid: { display: false }, border: { color: css('--eje') } },
+        y: { stacked: true, beginAtZero: true, border: { display: false }, ticks: { callback: v => fmtMoneda(v, 'PEN', true) } }
+      }
+    }
+  });
+}

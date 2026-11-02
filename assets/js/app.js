@@ -6,7 +6,7 @@ import { Auth } from './auth.js';
 import { cargarBD, AccesoDenegado, SesionVencida } from './sheetsRepo.js';
 import * as M from './model.js';
 import * as V from './views.js';
-import { graficoEvolucion, graficoCategorias } from './charts.js';
+import { graficoEvolucion, graficoCategorias, graficoDescuentos, graficoIngresosBoleta } from './charts.js';
 
 const $ = id => document.getElementById(id);
 const POR_PAGINA = 50;
@@ -90,6 +90,13 @@ function render() {
   V.renderContrapartes($('t-contrapartes'), M.topContrapartes(movs, periodo, moneda), moneda);
   V.renderTarjetas($('t-tarjetas'), deuda);
   V.renderPrestamos($('t-prestamos'), deuda);
+  V.renderCuentas($('t-cuentas'), M.resumenCuentas(estado.datos.cta || []));
+
+  const boletas = M.resumenBoletas(estado.datos.ing || []);
+  const boleta = M.boletaDelPeriodo(boletas, periodo), acum = M.acumuladoAnual(boletas, periodo);
+  V.renderIngresosBoleta($('kpis-ing-boleta'), $('t-ing-boletas'), boletas, boleta, acum, periodo);
+  V.renderRemuneracion($('kpis-boleta'), $('t-boletas'), $('nota-boleta'), boletas, boleta, acum, periodo);
+  if (window.Chart && boletas.length) { graficoIngresosBoleta(boletas); graficoDescuentos(boletas); }
   renderTablaMov();
 }
 

@@ -18,7 +18,7 @@ export const CONFIG = Object.freeze({
 
   HOJAS: {
     MOV: 'Movimientos', TAR: 'Tarjetas', PRE: 'Prestamos', CRO: 'Cronograma_Prestamos',
-    ING: 'Ingresos', USR: 'Usuarios', CFG: 'Config'
+    ING: 'Ingresos', USR: 'Usuarios', CFG: 'Config', CTA: 'Cuentas'
   },
 
   ZONA: 'America/Lima'
